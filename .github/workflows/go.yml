@@ -1,0 +1,76 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Build workshop artifacts
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.20"
+
+      - name: Version
+        run: go version
+
+      - name: Install claat
+        run: |
+          go install github.com/googlecodelabs/tools/claat@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Check claat binary
+        run: ls -al $HOME/go/bin
+
+      - name: Create codelab artifacts
+        run: ./create-artifacts.sh
+
+      - name: Verify artifacts directories
+        run: |
+            for dir in $(find . -type d); do
+              if [ -f "$dir/index.html" ]; then
+              echo "Directory containg index.html $dir"
+              fi
+            done
+      
+      - name: Commit and push artifacts to gh-pages
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git branch
+          git status
+          for dir in $(find . -type d); do
+            if [ -f "$dir/index.html" ]; then
+              echo "Directory containg index.html $dir"
+              git add $dir
+            fi
+          done
+          git status
+          git stash
+          git status
+          git pull
+          git checkout gh-pages
+          ls -al
+          for dir in $(find . -type d); do
+            if [ -f "$dir/index.html" ]; then
+              echo "Deleting directory containing index.html: $dir"
+              rm -rf "$dir"
+            fi
+          done
+          ls -al
+          git add .
+          git stash pop
+          git add .
+          git status
+          git commit -m 'Add workshop codelab artifacts'
+          git push -f
